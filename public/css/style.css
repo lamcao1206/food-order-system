@@ -1,0 +1,85 @@
+body {
+  background-color: #f4f6f8;
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1;
+}
+
+header {
+  background-color: #1877f2;
+  color: white;
+}
+
+header h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.card {
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.card-body {
+  padding: 30px;
+  background-color: #ffffff;
+}
+
+footer {
+  background-color: #f1f2f6;
+  color: #777;
+  border-top: 1px solid #ddd;
+  text-align: center;
+  padding: 20px 0;
+}
+
+footer a {
+  text-decoration: none;
+  color: #1877f2;
+}
+
+footer a:hover {
+  text-decoration: underline;
+}
+
+footer p {
+  margin: 0;
+  padding: 0;
+}
+
+.navbar {
+  background-color: #fff;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.navbar-brand {
+  color: #1877f2;
+  font-weight: bold;
+}
+.navbar-brand:hover {
+  color: #165cdb;
+}
+.form-control {
+  border-radius: 20px;
+}
+.nav-link {
+  color: #1877f2;
+  font-weight: 500;
+}
+
+.nav-link:active {
+  color: black;
+}
+.nav-link:hover {
+  color: #165cdb;
+}
+.navbar-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
