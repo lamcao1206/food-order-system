@@ -16,7 +16,7 @@
     <%- include('_layout/navbar.ejs') %>
     <main class="container mt-5">
       <button
-        class="btn btn-primary mb-3"
+        class="btn btn-primary mb-3 additem"
         data-bs-toggle="modal"
         data-bs-target="#addModal"
       >
@@ -64,11 +64,7 @@
                 <!-- Restaurant Field -->
                 <div class="col">
                   <label for="restaurant" class="form-label">Restaurant</label>
-                  <select
-                    class="form-select selectrestaurant"
-                    id="restaurant"
-                    required
-                  >
+                  <select class="form-select selectrestaurant" id="restaurant">
                     <option value="" selected disabled>
                       Choose a restaurant...
                     </option>
@@ -82,7 +78,6 @@
                     class="form-select selectcategory"
                     id="category"
                     disabled
-                    required
                   >
                     <option value="" selected disabled>
                       Choose a category...
@@ -92,11 +87,11 @@
               </div>
               <div class="mb-3">
                 <label for="name" class="form-label">Food Name</label>
-                <input type="text" class="form-control" id="name" required />
+                <input type="text" class="form-control" id="name" />
               </div>
               <div class="mb-3">
                 <label for="price" class="form-label">Price</label>
-                <input type="number" class="form-control" id="price" required />
+                <input type="number" class="form-control" id="price" />
               </div>
             </form>
           </div>
@@ -273,8 +268,15 @@
         `
       )
       .join("");
-
-      async function getCategory(params) {
+      document.querySelector('.additem').addEventListener('click',()=>{
+        document.getElementById("restaurant").value="";
+        document.getElementById("category").value="";
+        document.getElementById('price').value="";
+        document.getElementById('name').value="";
+        document.getElementById('category').innerHTML='<option value="" selected disabled> Choose a category...</option>';
+        document.getElementById(`category`).disabled=true;
+      })
+      async function getCategory(operation) {
         try {
           const response = await fetch('http://localhost:3000/fooditem/res-category', {
               method: 'GET',
@@ -290,38 +292,45 @@
           const res_data = await response.json();
           const res_category = res_data.res_table;
           console.log(res_category);
-          document.querySelector(`.selectrestaurant`).innerHTML += Object.keys(res_category).map((key) =>
+          const restaurantSelect = document.getElementById(`${operation}restaurant`);
+          const categorySelect = document.getElementById(`${operation}category`);
+          document.querySelector(`.selectrestaurant${operation}`).innerHTML += Object.keys(res_category).map((key) =>
               `<option value="${key}">${key}</option>`
           ).join('');
 
-          const restaurantSelect = document.getElementById(`restaurant`);
-          const categorySelect = document.getElementById(`category`);
+
           restaurantSelect.addEventListener("change", () => {
           categorySelect.disabled = false;
 
           const selectedRestaurant = restaurantSelect.value;
-          document.querySelector(`.selectcategory`).innerHTML =
+          document.querySelector(`.selectcategory${operation}`).innerHTML = '<option value="" selected disabled> Choose a category...</option>'+
           res_category[selectedRestaurant].map((item) =>
               `<option value="${item}">${item}</option>`
           ).join('');
-          return res_category;
         });
         } catch (err) {
           alert(err.message);
         }
       }
 
-      getCategory();
+      getCategory("");
 
       document.getElementById('addForm').addEventListener("submit",async (e)=> {
         e.preventDefault();
+        const fields = [
+        {name:"restaurant",display:"Restaurant"},
+        {name:"category",display:"Category"},
+        {name:"name",display:"Name"},
+        {name:"price",display:"Price"}];
+
         const restaurant = document.getElementById("restaurant").value;
         const category = document.getElementById("category").value;
         const price = document.getElementById('price').value;
         const name = document.getElementById('name').value;
 
+        const missingfields = fields.filter((field)=>!document.getElementById(field.name).value).map((item)=>item.display);
         if (!restaurant || !category || !price || !name) {
-        alert("Vui lòng điền đầy đủ thông tin!");
+        alert(`Bạn chưa điền các thông tin ${missingfields.join(",")}`);
         return;
         }
         try{
@@ -374,35 +383,7 @@
         });
         });
       });
-
-      document.querySelectorAll('.update-btn').forEach((button) => {
-        button.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const foodItemId = e.target.getAttribute('data-id');
-        const response = await fetch('http://localhost:3000/fooditem/res-category', {
-              method: 'GET',
-              headers: {
-                  'Content-Type': 'application/json'
-              }
-          });
-          if (!response.ok) {
-              throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-          const res_data = await response.json();
-          const res_category = res_data.res_table;
-          console.log(res_category);
-          document.querySelector(`.selectrestaurantupdate`).innerHTML = Object.keys(res_category).map((key) =>
-              `<option value="${key}">${key}</option>`
-          ).join('');
-          document.querySelector(`.selectcategoryupdate`).innerHTML =
-          res_category[e.target.getAttribute('data-restaurant')].map((item) =>
-              `<option value="${item}">${item}</option>`
-          ).join('');
-          const fields = ["restaurant","category", "price", "name"];
-          fields.forEach(field=>{
-            document.getElementById(`update${field}`).value=e.target.getAttribute(`data-${field}`);
-          })
-          document.getElementById('updateForm').addEventListener('submit',async (e)=>{
+      document.getElementById('updateForm').addEventListener('submit',async (e)=>{
             e.preventDefault();
             const restaurant = document.getElementById("updaterestaurant").value;
             const category = document.getElementById("updatecategory").value;
@@ -442,11 +423,41 @@
               alert(err.message);
             }
           });
+      document.querySelectorAll('.update-btn').forEach((button) => {
+        button.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const response = await fetch('http://localhost:3000/fooditem/res-category', {
+              method: 'GET',
+              headers: {
+                  'Content-Type': 'application/json'
+              }
+          });
+          if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+          const res_data = await response.json();
+          const res_category = res_data.res_table;
+          console.log(res_category);
+          document.querySelector(`.selectrestaurantupdate`).innerHTML = Object.keys(res_category).map((key) =>
+              `<option value="${key}">${key}</option>`
+          ).join('');
 
+
+
+          document.querySelector(`.selectcategoryupdate`).innerHTML =
+          res_category[document.querySelector('.selectrestaurantupdate').value].map((item) =>
+              `<option value="${item}">${item}</option>`
+          ).join('');
+
+          const fields = ["restaurant","category", "price", "name"];
+          fields.forEach(field=>{
+            document.getElementById(`update${field}`).value=e.target.getAttribute(`data-${field}`);
+          })
 
       });
 
       });
+      getCategory("update");
     </script>
     <!-- Include Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
