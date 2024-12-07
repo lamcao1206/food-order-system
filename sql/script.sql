@@ -180,7 +180,7 @@ DELIMITER ;
 -- TRIGGER 2
 -- DELIMITER $$
 
--- CREATE TRIGGER check_restaurant_discount_limit
+-- CREATE TRIGGER check_restaurant_disco    unt_limit
 -- BEFORE INSERT ON APPLY_FOR
 -- FOR EACH ROW
 -- BEGIN

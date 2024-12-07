@@ -13,3 +13,16 @@
   integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
   crossorigin="anonymous"
 ></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const currentPath = window.location.pathname;
+    const navLinks = document.querySelectorAll('.nav-link');
+
+    navLinks.forEach((link) => {
+      if (link.getAttribute('href') === currentPath) {
+        link.classList.add('active');
+      }
+    });
+  });
+</script>

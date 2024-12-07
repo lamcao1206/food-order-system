@@ -58,6 +58,7 @@ footer p {
   background-color: #fff;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
+
 .navbar-brand {
   color: #1877f2;
   font-weight: bold;
@@ -75,10 +76,13 @@ footer p {
 
 .nav-link:active {
   color: black;
+  font-weight: bold;
 }
+
 .nav-link:hover {
   color: #165cdb;
 }
+
 .navbar-container {
   max-width: 1200px;
   margin: 0 auto;
