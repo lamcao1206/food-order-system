@@ -56,13 +56,10 @@ export default class FoodItemController {
       }
 
       //Insert new FoodItem
-      const sql_addfooditem = `
-      INSERT INTO food_item (name,price,categoryID) 
-      VALUES (?,?,?)
-      `;
-      const [result] = await pool.execute(sql_addfooditem, [
+      const [result] = await pool.execute('CALL AddFoodItem(?,?,?,?)', [
         name,
         price,
+        "",
         categoryID,
       ]);
 
@@ -104,8 +101,7 @@ export default class FoodItemController {
       const categoryID = categoryRows[0].ID;
 
       //Update food item info
-      const sql = "UPDATE food_item SET name = ?, price = ?, categoryID = ? WHERE id = ?";
-      const [result] = await pool.execute(sql, [name, price, categoryID,ID]);
+      const [result] = await pool.execute('CALL UpdateFoodItem(?,?,?,?,?)', [ID,name, price,"", categoryID]);
       res.status(200).json({
         status:"success",
         message: "User updated successfully!",
@@ -131,8 +127,7 @@ export default class FoodItemController {
       }
 
       //Delete food item
-      const sql = "DELETE FROM food_item WHERE ID= ?";
-      await pool.execute(sql, [ID]);
+      await pool.execute('CALL DeleteFoodItem(?)', [ID]);
 
       res.status(200).json({
         status: "success",
