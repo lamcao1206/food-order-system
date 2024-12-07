@@ -1,4 +1,5 @@
 node_modules/
 .env
+MySQL.session.sql 
 .DS_Store
 .vscode

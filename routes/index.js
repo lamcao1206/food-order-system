@@ -13,7 +13,7 @@ router.get('/', (req, res, next) => {
   res.render('index', { title: 'Express' });
 });
 
-router.use('/task1', task1);
+router.use('/fooditem', task1);
 router.use('/task2', task2);
 router.use('/task3', task3);
 

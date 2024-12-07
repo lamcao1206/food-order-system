@@ -57,9 +57,19 @@ footer p {
 .navbar {
   background-color: #fff;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  height: 80px; 
+  padding-top: 20px; 
+  padding-bottom: 20px;
+}
+.navbar-nav .nav-link {
+  font-size: 1.5rem;
+}
+.container-fluid {
+  min-width: 70%
 }
 
 .navbar-brand {
+  font-size:2rem;
   color: #1877f2;
   font-weight: bold;
 }
@@ -86,4 +96,14 @@ footer p {
 .navbar-container {
   max-width: 1200px;
   margin: 0 auto;
+}
+.modal-dialog {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  max-width: 500px;
+  width: 100%;
+  z-index: 1055;
 }
