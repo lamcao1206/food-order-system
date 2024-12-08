@@ -38,14 +38,10 @@ BEGIN
 
 	RETURN count;
 END $$
-
-
-SELECT * FROM FOOD_ITEM fi
-JOIN CATEGORY c on c.ID = fi.categoryID
-JOIN RESTAURANT r on r.ID = c.RID;
+DELIMITER ;
 
 -- 
---  Function 1 : categorize_food
+--  Function 2 : categorize_food
 -- 
 
 DROP FUNCTION IF EXISTS categorize_food;
@@ -105,3 +101,5 @@ BEGIN
 
     RETURN price_level;
 END $$
+
+DELIMITER ;

@@ -21,25 +21,21 @@
             <div class="card-body">
               <h2 class="card-title mb-4 text-center text-primary">Check Quantity of Food Items in a Category</h2>
 
-              <form method="POST" action="/task3">
+              <form id="form-1" method="POST" action="/task3/1">
                 <div class="mb-3">
                   <label for="restaurantName" class="form-label">Restaurant Name</label>
-                  <input type="text" class="form-control" id="restaurantName" name="restaurantName" required />
+                  <input type="text" class="form-control" id="restaurantName1" name="restaurantName" required />
                 </div>
 
                 <div class="mb-3">
                   <label for="categoryId" class="form-label">Category ID</label>
-                  <input type="number" class="form-control" id="categoryId" name="categoryId" required />
+                  <input type="number" class="form-control" id="categoryId1" name="categoryId" required />
                 </div>
 
                 <button type="submit" class="btn btn-primary w-100">Check Quantity</button>
               </form>
 
-              <% if (result !== null) { %>
-              <div class="mt-4 alert alert-info text-center"><strong>Result:</strong> There are <%= result %> food items in the category.</div>
-              <% } else if (error !== null) { %>
-              <div class="mt-4 alert alert-danger text-center"><strong>Warning:</strong> <%= error %></div>
-              <% } %>
+              <div id="result-one" class="mt-4"></div>
 
               <p class="mt-4 card-text">
                 The Food Order System allows you to browse and order food from various restaurants. Whether you're craving pizza, sushi, or home-cooked meals, we've got you covered. You can easily
@@ -61,7 +57,129 @@
           </div>
         </div>
       </div>
+
+      <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6 mb-4">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h2 class="card-title mb-4 text-center text-primary">Get the price level for each food items in a specific restaurant</h2>
+
+              <form id="form-2" method="POST" action="/task3/2">
+                <div class="mb-3">
+                  <label for="restaurantName" class="form-label">Restaurant Name</label>
+                  <input type="text" class="form-control" id="restaurantName2" name="restaurantName" required />
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Check price level</button>
+              </form>
+
+              <div id="result-two" class="mt-4"></div>
+
+              <p class="mt-4 card-text">
+                The Food Order System allows you to browse and order food from various restaurants. Whether you're craving pizza, sushi, or home-cooked meals, we've got you covered. You can easily
+                view the number of food items available in each category.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4 col-lg-3">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title text-center">Input Guidelines</h5>
+              <ul class="list-unstyled">
+                <li><strong>Restaurant Name:</strong> Must be a valid restaurant name, only letters and spaces allowed.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
     </main>
     <%- include('_layout/footer.ejs') %>
+    <script>
+      document.getElementById('form-1').addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const restaurantName = document.getElementById('restaurantName1').value;
+        const categoryId = document.getElementById('categoryId1').value;
+
+        fetch('/task3/1', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ restaurantName, categoryId }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.err) {
+              document.getElementById('result-one').innerHTML = `<div class="alert alert-danger text-center"><strong>Error:</strong> ${data.err}</div>`;
+            } else {
+              document.getElementById('result-one').innerHTML = `<div class="alert alert-info text-center"><strong>Result:</strong> There are ${data.total_food} food items in the category.</div>`;
+            }
+          })
+          .catch((error) => {
+            document.getElementById('result-one').innerHTML = `<div class="alert alert-danger text-center"><strong>Error:</strong> ${error.message}</div>`;
+          });
+      });
+
+       document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('form-2').addEventListener('submit', function (e) {
+          e.preventDefault();
+
+          const restaurantName = document.getElementById('restaurantName2').value;
+
+          fetch('/task3/2', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ restaurantName }),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              const resultTwoDiv = document.getElementById('result-two');
+              resultTwoDiv.innerHTML = ''; 
+
+              if (data.err) {
+                resultTwoDiv.innerHTML = `<div class="alert alert-danger text-center"><strong>Error:</strong> ${data.err}</div>`;
+              } else {
+                if (data.result && data.result.length > 0) {
+                  const table = document.createElement('table');
+                  table.classList.add('table', 'table-bordered', 'mt-4');
+                  
+                  const thead = document.createElement('thead');
+                  const headerRow = document.createElement('tr');
+                  headerRow.innerHTML = `
+                    <th>Food Item</th>
+                    <th>Price</th>
+                    <th>Price Level</th>
+                  `;
+                  thead.appendChild(headerRow);
+                  table.appendChild(thead);
+
+                  const tbody = document.createElement('tbody');
+                  data.result.forEach((item) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                      <td>${item.name}</td>
+                      <td>${item.price}</td>
+                      <td>${item.price_level}</td>
+                    `;
+                    tbody.appendChild(row);
+                  });
+                  table.appendChild(tbody);
+
+                  resultTwoDiv.appendChild(table);
+                } else {
+                  resultTwoDiv.innerHTML = '<div class="alert alert-info text-center">No food items found for this restaurant.</div>';
+                }
+              }
+            })
+            .catch((error) => {
+              const resultTwoDiv = document.getElementById('result-two');
+              resultTwoDiv.innerHTML = `<div class="alert alert-danger text-center"><strong>Error:</strong> ${error.message}</div>`;
+            });
+        });
+      });
+    </script>
   </body>
 </html>
