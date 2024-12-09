@@ -20,9 +20,14 @@
     <%- include('_layout/navbar.ejs') %>
     <main class="container mt-4" style="min-width: 80%">
       <div
-        class="d-flex align-items-center justify-content-center fs-1 fw-bold mb-1 text-primary"
+        class="d-flex align-items-center justify-content-between fs-1 mb-1 text-primary w-100"
       >
-        GET ORDERS WITH DISCOUNTS
+        <h1 class="fw-bold text-end" style="width: 70%">
+          GET ORDERS BY CATEGORY
+        </h1>
+        <button class="btn btn-danger fs-5 text-end me-3 resetbutton">
+          Reset
+        </button>
       </div>
       <div class="content row">
         <div class="col-md-4 table-container">
@@ -30,7 +35,7 @@
             <input
               type="number"
               class="form-control input-field input-button inputcusID"
-              placeholder="Enter CustomerID"
+              placeholder="Enter CategoryID"
               style="height: 5vh; font-size: 20px; margin-right: 8px"
             />
             <button
@@ -43,20 +48,29 @@
           <table class="table table-bordered">
             <thead>
               <tr>
-                <th>CustomerID</th>
-                <th style="width: 70%">Name</th>
+                <th>CategoryID</th>
+                <th style="width: 40%">Category Name</th>
+                <th style="width: 40%">Restaurant Name</th>
               </tr>
             </thead>
-            <tbody class="table-customerid"></tbody>
+            <tbody class="table-categoryid"></tbody>
           </table>
         </div>
 
         <div class="col-md-8 table-container border-left">
-          <form class="d-flex justify-content-between align-items-center mb-2">
+          <form
+            class="d-flex justify-content-end align-items-center mb-2 w-100"
+          >
+            <input
+              type="text"
+              class="form-control input-field input-button inputname"
+              placeholder="Enter customer name"
+              style="height: 5vh; font-size: 20px; margin-right: 8px"
+            />
             <input
               type="text"
               class="form-control input-field input-button inputstatus"
-              placeholder="Input status"
+              placeholder="Enter status"
               style="height: 5vh; font-size: 20px; margin-right: 8px"
             />
             <input
@@ -105,14 +119,14 @@
             <thead>
               <tr>
                 <th class="text-center">OrderID</th>
-                <th class="text-center">FoodItem</th>
+                <th class="text-center">Customer</th>
                 <th class="text-center">Total Price</th>
                 <th class="text-center">Date</th>
                 <th class="text-center">Rating</th>
                 <th class="text-center">Status</th>
               </tr>
             </thead>
-            <tbody class="table-orderswithdiscounts"></tbody>
+            <tbody class="table-ordersbycategory"></tbody>
           </table>
         </div>
         <!-- Delete Confirmation Modal -->
@@ -164,9 +178,10 @@
 
     <script>
       let globalorders = [];
-
+      let filterorders = [];
+      let sortorders = [];
       //functino to retrieve customer information from database
-      async function getCategory() {
+      async function getCustomer() {
         try {
           const response = await fetch(
             "http://localhost:3000/api/task2/categoryid",
@@ -182,12 +197,14 @@
           }
 
           const { result } = await response.json();
-          document.querySelector(".table-customerid").innerHTML = result
+          sortresult =result.sort((a, b) => a.ID - b.ID);
+          document.querySelector(".table-categoryid").innerHTML = sortresult
             .map(
               (item) =>
                 `<tr>
-                <td>${item.ID}</td>
-                <td>${item.name}</td>
+                <td class="text-center" >${item.ID}</td>
+                <td>${item.categoryName}</td>
+                <td>${item.resName}</td>
               </tr>
             `
             )
@@ -196,10 +213,37 @@
           alert(err.message);
         }
       }
-      getCategory();
+      getCustomer();
 
       //function to display orders in table
       async function DisplayOrders(result) {
+        function get_default_datetime(timestamp) {
+          const date = new Date(timestamp);
+          const hours = String(date.getHours()).padStart(2, "0");
+          const minutes = String(date.getMinutes()).padStart(2, "0");
+          const seconds = String(date.getSeconds()).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const year = date.getFullYear();
+
+          return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+
+        function getStatusStyle(status) {
+          switch (status) {
+            case "delivered":
+              return "color: #28a745;";
+            case "confirmed":
+              return "color: blue;";
+            case "pending":
+              return "color: #FFC107;";
+            default:
+              return "color: black;";
+          }
+        }
+        result.forEach((item) => {
+          item.OrderTime = get_default_datetime(item.OrderTime);
+        });
         return !result
           ? ""
           : result
@@ -207,15 +251,13 @@
                 (item) =>
                   `<tr style="font-size:20px">
               <td class="text-center">${item.OrderID}</td>
-              <td class="text-center">${item.FoodItemName}</td>
+              <td class="text-center">${item.CustomerName}</td>
               <td class="text-center">${item.TotalRevenue}</td>
               <td class="text-center">${item.OrderTime}</td>
               <td class="text-center">${item.rating || 5}</td>
-              <td class="text-center" style="${
-                item.OrderStatus === "delivered"
-                  ? "color: blue;"
-                  : "color: red;"
-              } font-weight: bold;">
+              <td class="text-center" style="${getStatusStyle(
+                item.OrderStatus
+              )} font-weight: bold;">
                 ${item.OrderStatus}
               </td>
               <td class="text-center"><i class="bi-trash-fill delete-button" style="font-size:20px" data-id="${
@@ -242,7 +284,6 @@
             );
             deleteConfirmationModal.show();
 
-            // Lắng nghe sự kiện khi nhấn nút 'Delete' trong popup
             confirmDeleteButton.onclick = async () => {
               try {
                 const response = await fetch(
@@ -254,17 +295,21 @@
                     },
                   }
                 );
-                if (!response.ok) {
-                  throw new Error(`HTTP error! Status: ${response.status}`);
-                }
 
                 const res_data = await response.json();
                 if (res_data.status === "success") {
-                  location.reload(); // Hoặc cập nhật lại bảng mà không cần reload trang.
+                  globalorders = globalorders.filter(
+                    (item) => item.OrderID != OrderID
+                  );
+                  sortorders = globalorders;
+                  filterorders = globalorders;
+                  document.querySelector(".table-ordersbycategory").innerHTML =
+                    await DisplayOrders(globalorders);
+                  attachDeleteEvents();
                 } else {
                   alert(res_data.message);
+                  return;
                 }
-                // Đóng modal sau khi xóa thành công
                 deleteConfirmationModal.hide();
               } catch (err) {
                 console.log(err);
@@ -287,19 +332,22 @@
               },
             }
           );
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
 
           const res_orders = await response.json();
+          if (res_orders.status != "success") {
+            alert(res_orders.message);
+            return;
+          }
           const orders = res_orders.result;
           console.log(orders);
           let result = [...orders];
 
-          document.querySelector(".table-orderswithdiscounts").innerHTML =
+          document.querySelector(".table-ordersbycategory").innerHTML =
             await DisplayOrders(result);
           attachDeleteEvents();
           globalorders = result;
+          filterorders = result;
+          sortorders = result;
         } catch (err) {
           alert(err.message);
         }
@@ -320,15 +368,19 @@
         .querySelector(".filterorders")
         .addEventListener("click", async (event) => {
           event.preventDefault();
+          const cusname = document.querySelector(".inputname").value;
           const status = document.querySelector(".inputstatus").value;
           const rating = document.querySelector(".inputrating").value;
-          let result = [...globalorders];
-          result = globalorders.filter((item) => {
+          let result = [...sortorders];
+          result = result.filter((item) => {
+            const matchCusName =
+              !cusname || item.CustomerName.includes(cusname);
             const matchRating = !rating || item.rating == rating;
-            const matchStatus = !status || item.GetStatus === status;
-            return matchRating && matchStatus;
+            const matchStatus = !status || item.OrderStatus == status;
+            return matchRating && matchStatus && matchCusName;
           });
-          document.querySelector(".table-orderswithdiscounts").innerHTML =
+          filterorders = result;
+          document.querySelector(".table-ordersbycategory").innerHTML =
             await DisplayOrders(result);
           attachDeleteEvents();
         });
@@ -338,31 +390,64 @@
         .querySelector(".sortorders")
         .addEventListener("click", async (event) => {
           event.preventDefault();
+          function isValidDate(dateStr) {
+            const date = new Date(dateStr);
+            return !isNaN(date.getTime());
+          }
+
           const sortKey = document.querySelector(".inputsortkey").value;
           const sortOrder = document.querySelector(".inputsortorder").value;
-
-          let result = [...globalorders];
+          if (!sortKey || !sortOrder) {
+            alert("Please input both sort field and sort order");
+            return;
+          }
+          let result = [...filterorders];
 
           result.sort((a, b) => {
             let valueA = a[sortKey];
             let valueB = b[sortKey];
 
+            if (isValidDate(valueA) && isValidDate(valueB)) {
+              const dA = new Date(valueA);
+              const dB = new Date(valueB);
+
+              return sortOrder === "asc" ? dA - dB : dB - dA;
+            }
             if (valueA === null || valueA === undefined) valueA = "";
             if (valueB === null || valueB === undefined) valueB = "";
 
             if (typeof valueA === "number" && typeof valueB === "number") {
               return sortOrder === "asc" ? valueA - valueB : valueB - valueA;
             } else {
-              valueA = valueA.toString().toLowerCase();
-              valueB = valueB.toString().toLowerCase();
-              if (valueA < valueB) return sortOrder === "asc" ? -1 : 1;
-              if (valueA > valueB) return sortOrder === "asc" ? 1 : -1;
-              return 0;
+              valueA = Number(valueA);
+              valueB = Number(valueB);
+              return sortOrder === "asc" ? valueA - valueB : valueB - valueA;
             }
           });
 
-          document.querySelector(".table-orderswithdiscounts").innerHTML =
+          sortorders = result;
+          document.querySelector(".table-ordersbycategory").innerHTML =
             await DisplayOrders(result);
+          attachDeleteEvents();
+        });
+      document
+        .querySelector(".resetbutton")
+        .addEventListener("click", async (e) => {
+          e.preventDefault();
+          filterorders = [...globalorders];
+          sortorders = [...globalorders];
+          const inputs = [
+            "inputsortkey",
+            "inputsortorder",
+            "inputstatus",
+            "inputrating",
+            "inputname",
+          ];
+          inputs.forEach((input) => {
+            document.querySelector(`.${input}`).value = "";
+          });
+          document.querySelector(".table-ordersbycategory").innerHTML =
+            await DisplayOrders(globalorders);
           attachDeleteEvents();
         });
     </script>

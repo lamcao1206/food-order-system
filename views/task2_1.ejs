@@ -49,7 +49,7 @@
             <thead>
               <tr>
                 <th>CustomerID</th>
-                <th style="width: 70%">Name</th>
+                <th style="width: 80%">Name</th>
               </tr>
             </thead>
             <tbody class="table-customerid"></tbody>
@@ -195,7 +195,7 @@
             .map(
               (item) =>
                 `<tr>
-                <td>${item.ID}</td>
+                <td class="text-center">${item.ID}</td>
                 <td>${item.name}</td>
               </tr>
             `
@@ -267,7 +267,6 @@
             e.preventDefault();
             const OrderID = e.target.getAttribute("data-id");
 
-            // Mở modal xác nhận khi nhấn nút xóa
             const confirmDeleteButton = document.getElementById(
               "confirmDeleteButton"
             );
@@ -276,7 +275,6 @@
             );
             deleteConfirmationModal.show();
 
-            // Lắng nghe sự kiện khi nhấn nút 'Delete' trong popup
             confirmDeleteButton.onclick = async () => {
               try {
                 const response = await fetch(
