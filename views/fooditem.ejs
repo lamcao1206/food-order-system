@@ -131,7 +131,7 @@
             ></button>
           </div>
           <div class="modal-body">
-            <form id="updateForm">
+            <form id="updateForm" data-id=""">
               <input type="hidden" id="updateId" />
               <div class="row mb-3">
                 <!-- Restaurant Field -->
@@ -389,7 +389,7 @@
             const category = document.getElementById("updatecategory").value;
             const price = document.getElementById('updateprice').value;
             const name = document.getElementById('updatename').value;
-
+            const foodItemId = e.target.getAttribute('data-id');
             if (!restaurant || !category || !price || !name) {
               alert("Vui lòng điền đầy đủ thông tin!");
               return;
@@ -409,9 +409,7 @@
               }
               )
             });
-            if (!response.ok) {
-              throw new Error(`HTTP error! Status: ${response.status}`);
-            }
+
             const res_data = await response.json();
             if (res_data.status==="success") {
                 location.reload();
@@ -437,7 +435,7 @@
           }
           const res_data = await response.json();
           const res_category = res_data.res_table;
-          console.log(res_category);
+          document.getElementById('updateForm').setAttribute('data-id', e.target.getAttribute('data-id'));
           document.querySelector(`.selectrestaurantupdate`).innerHTML = Object.keys(res_category).map((key) =>
               `<option value="${key}">${key}</option>`
           ).join('');

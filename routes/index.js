@@ -13,9 +13,13 @@ router.get('/', (req, res, next) => {
   res.render('index', { title: 'Express' });
 });
 
-router.get('/task2',(req,res,next)=> {
-  res.render('task2',{ title: 'Express' })
-})
+router.get('/task2_1',(req,res,next)=> {
+  res.render('task2_1',{ title: 'Express' });
+});
+
+router.get('/task2_2',(req,res,next)=> {
+  res.render('task2_2',{ title: 'Express' });
+});
 
 router.use('/fooditem', task1);
 router.use('/api/task2', task2);

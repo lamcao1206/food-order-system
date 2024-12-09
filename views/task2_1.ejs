@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Food Order System</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body class="bg-light">
+    <%- include('_layout/navbar.ejs') %>
+    <main class="container mt-4" style="min-width: 80%">
+      <div
+        class="d-flex align-items-center justify-content-between fs-1 mb-1 text-primary w-100"
+      >
+        <h1 class="fw-bold text-end" style="width: 70%">
+          GET ORDERS WITH DISCOUNTS
+        </h1>
+        <button class="btn btn-danger fs-5 text-end me-3 resetbutton">
+          Reset
+        </button>
+      </div>
+      <div class="content row">
+        <div class="col-md-4 table-container">
+          <form class="d-flex justify-content-between align-items-center mb-2">
+            <input
+              type="number"
+              class="form-control input-field input-button inputcusID"
+              placeholder="Enter CustomerID"
+              style="height: 5vh; font-size: 20px; margin-right: 8px"
+            />
+            <button
+              class="btn btn-primary input-button findorders"
+              style="height: 5vh; font-size: 20px; margin-bottom: 15px"
+            >
+              Submit
+            </button>
+          </form>
+          <table class="table table-bordered">
+            <thead>
+              <tr>
+                <th>CustomerID</th>
+                <th style="width: 70%">Name</th>
+              </tr>
+            </thead>
+            <tbody class="table-customerid"></tbody>
+          </table>
+        </div>
+
+        <div class="col-md-8 table-container border-left">
+          <form
+            class="d-flex justify-content-end align-items-center mb-2 w-100"
+          >
+            <input
+              type="text"
+              class="form-control input-field input-button inputstatus"
+              placeholder="Input status"
+              style="height: 5vh; font-size: 20px; margin-right: 8px"
+            />
+            <input
+              type="Number"
+              class="form-control input-field input-button inputrating"
+              placeholder="Input rating"
+              style="height: 5vh; font-size: 20px; margin-right: 8px"
+            />
+            <button
+              class="btn btn-primary input-button filterorders"
+              type="submit"
+              style="height: 5vh; font-size: 20px; margin-bottom: 8px"
+            >
+              Filter
+            </button>
+          </form>
+          <form class="d-flex justify-content-between align-items-center mb-2">
+            <select
+              class="form-select input-field input-button inputsortkey"
+              style="height: 5vh; font-size: 20px; margin-right: 8px"
+            >
+              <option value="" selected disabled>Choose a field</option>
+              <option value="OrderID">Order ID</option>
+              <option value="TotalDiscount">Total Discount</option>
+              <option value="TotalOrderPrice">Total Price</option>
+              <option value="OrderTimestamp">Date</option>
+              <option value="rating">Rating</option>
+            </select>
+            <select
+              class="form-select input-field input-button inputsortorder"
+              style="height: 5vh; font-size: 20px; margin-right: 8px"
+            >
+              <option value="" selected disabled>Choose order</option>
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+            <button
+              class="btn btn-primary input-button sortorders"
+              type="submit"
+              style="height: 5vh; font-size: 20px; margin-bottom: 8px"
+            >
+              Sort
+            </button>
+          </form>
+
+          <table class="table table-striped table-bordered table-hover">
+            <thead>
+              <tr>
+                <th class="text-center">OrderID</th>
+                <th class="text-center">Total Discount</th>
+                <th class="text-center">Total Price</th>
+                <th class="text-center">Date</th>
+                <th class="text-center">Rating</th>
+                <th class="text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody class="table-orderswithdiscounts"></tbody>
+          </table>
+        </div>
+        <!-- Delete Confirmation Modal -->
+        <div
+          class="modal fade"
+          id="deleteConfirmationModal"
+          tabindex="-1"
+          aria-labelledby="deleteConfirmationModalLabel"
+          aria-hidden="true"
+        >
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="deleteConfirmationModalLabel">
+                  <strong>Confirm Deletion</strong>
+                </h5>
+                <button
+                  type="button"
+                  class="btn-close"
+                  data-bs-dismiss="modal"
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div class="modal-body fs-5">
+                Are you sure you want to delete this order?
+              </div>
+              <div class="modal-footer">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  data-bs-dismiss="modal"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  id="confirmDeleteButton"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <%- include('_layout/footer.ejs') %>
+
+    <script>
+      let globalorders = [];
+      let filterorders = [];
+      let sortorders = [];
+      //functino to retrieve customer information from database
+      async function getCustomer() {
+        try {
+          const response = await fetch(
+            "http://localhost:3000/api/task2/customerid",
+            {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            }
+          );
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+
+          const { result } = await response.json();
+          document.querySelector(".table-customerid").innerHTML = result
+            .map(
+              (item) =>
+                `<tr>
+                <td>${item.ID}</td>
+                <td>${item.name}</td>
+              </tr>
+            `
+            )
+            .join("");
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+      getCustomer();
+
+      //function to display orders in table
+      async function DisplayOrders(result) {
+        function get_default_datetime(timestamp) {
+          const date = new Date(timestamp);
+          const hours = String(date.getHours()).padStart(2, "0");
+          const minutes = String(date.getMinutes()).padStart(2, "0");
+          const seconds = String(date.getSeconds()).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const year = date.getFullYear();
+
+          return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+
+        function getStatusStyle(status) {
+          switch (status) {
+            case "delivered":
+              return "color: #28a745;";
+            case "confirmed":
+              return "color: blue;";
+            case "pending":
+              return "color: #FFC107;";
+            default:
+              return "color: black;";
+          }
+        }
+        result.forEach((item) => {
+          item.OrderTimestamp = get_default_datetime(item.OrderTimestamp);
+        });
+        return !result
+          ? ""
+          : result
+              .map(
+                (item) =>
+                  `<tr style="font-size:20px">
+              <td class="text-center">${item.OrderID}</td>
+              <td class="text-center">${item.TotalDiscount}</td>
+              <td class="text-center">${item.TotalOrderPrice}</td>
+              <td class="text-center">${item.OrderTimestamp}</td>
+              <td class="text-center">${item.rating || 5}</td>
+              <td class="text-center" style="${getStatusStyle(
+                item.OrderStatus
+              )} font-weight: bold;">
+                ${item.OrderStatus}
+              </td>
+              <td class="text-center"><i class="bi-trash-fill delete-button" style="font-size:20px" data-id="${
+                item.OrderID
+              }"></i></td>
+            </tr>`
+              )
+              .join("");
+      }
+
+      //function to delete order in table
+      function attachDeleteEvents() {
+        document.querySelectorAll(".delete-button").forEach((button) => {
+          button.addEventListener("click", (e) => {
+            e.preventDefault();
+            const OrderID = e.target.getAttribute("data-id");
+
+            // Mở modal xác nhận khi nhấn nút xóa
+            const confirmDeleteButton = document.getElementById(
+              "confirmDeleteButton"
+            );
+            const deleteConfirmationModal = new bootstrap.Modal(
+              document.getElementById("deleteConfirmationModal")
+            );
+            deleteConfirmationModal.show();
+
+            // Lắng nghe sự kiện khi nhấn nút 'Delete' trong popup
+            confirmDeleteButton.onclick = async () => {
+              try {
+                const response = await fetch(
+                  `http://localhost:3000/api/task2/${OrderID}`,
+                  {
+                    method: "DELETE",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                  }
+                );
+
+
+                const res_data = await response.json();
+                if (res_data.status === "success") {
+                  globalorders = globalorders.filter(
+                    (item) => item.OrderID != OrderID
+                  );
+                  sortorders = globalorders;
+                  filterorders = globalorders;
+                  document.querySelector(
+                    ".table-orderswithdiscounts"
+                  ).innerHTML = await DisplayOrders(globalorders);
+                  attachDeleteEvents();
+                } else {
+                  alert(res_data.message);
+                  return;
+                }
+                deleteConfirmationModal.hide();
+              } catch (err) {
+                console.log(err);
+                alert(err.message);
+              }
+            };
+          });
+        });
+      }
+
+      //function toretrieve orders from database
+      async function getOrdersWithDiscounts(ID) {
+        try {
+          const response = await fetch(
+            `http://localhost:3000/api/task2/orderswithdiscount/${ID}`,
+            {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          
+          const res_orders = await response.json();
+          if(res_orders.status!="success") {
+            alert(res_orders.message);
+            return;
+          }
+          const orders = res_orders.result;
+          console.log(orders);
+          let result = [...orders];
+
+          document.querySelector(".table-orderswithdiscounts").innerHTML =
+            await DisplayOrders(result);
+          attachDeleteEvents();
+          globalorders = result;
+          filterorders = result;
+          sortorders = result;
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+
+      //display orders with discounts
+      document
+        .querySelector(".findorders")
+        .addEventListener("click", async (e) => {
+          e.preventDefault();
+          const ID = document.querySelector(".inputcusID").value;
+          if (!ID) return DisplayOrders("");
+          await getOrdersWithDiscounts(ID);
+        });
+
+      //filter and display orders
+      document
+        .querySelector(".filterorders")
+        .addEventListener("click", async (event) => {
+          event.preventDefault();
+          const status = document.querySelector(".inputstatus").value;
+          const rating = document.querySelector(".inputrating").value;
+          let result = [...sortorders];
+          result = result.filter((item) => {
+            const matchRating = !rating || item.rating == rating;
+            const matchStatus = !status || item.OrderStatus == status;
+            return matchRating && matchStatus;
+          });
+          filterorders = result;
+          document.querySelector(".table-orderswithdiscounts").innerHTML =
+            await DisplayOrders(result);
+          attachDeleteEvents();
+        });
+
+      //sort and display orders
+      document
+        .querySelector(".sortorders")
+        .addEventListener("click", async (event) => {
+          event.preventDefault();
+          function isValidDate(dateStr) {
+            const date = new Date(dateStr);
+            return !isNaN(date.getTime());
+          }
+
+          const sortKey = document.querySelector(".inputsortkey").value;
+          const sortOrder = document.querySelector(".inputsortorder").value;
+          if (!sortKey || !sortOrder) {
+            alert("Please input both sort field and sort order");
+            return;
+          }
+          let result = [...filterorders];
+
+          result.sort((a, b) => {
+            let valueA = a[sortKey];
+            let valueB = b[sortKey];
+
+            if (isValidDate(valueA) && isValidDate(valueB)) {
+              const dA = new Date(valueA);
+              const dB = new Date(valueB);
+
+              return sortOrder === "asc" ? dA - dB : dB - dA;
+            }
+            if (valueA === null || valueA === undefined) valueA = "";
+            if (valueB === null || valueB === undefined) valueB = "";
+
+            if (typeof valueA === "number" && typeof valueB === "number") {
+              return sortOrder === "asc" ? valueA - valueB : valueB - valueA;
+            } else {
+              valueA = Number(valueA);
+              valueB = Number(valueB);
+              return sortOrder === "asc" ? valueA - valueB : valueB - valueA;
+            }
+          });
+
+          sortorders = result;
+          document.querySelector(".table-orderswithdiscounts").innerHTML =
+            await DisplayOrders(result);
+          attachDeleteEvents();
+        });
+      document
+        .querySelector(".resetbutton")
+        .addEventListener("click", async (e) => {
+          e.preventDefault();
+          filterorders = [...globalorders];
+          sortorders = [...globalorders];
+          const inputs = [
+            "inputsortkey",
+            "inputsortorder",
+            "inputstatus",
+            "inputrating",
+          ];
+          inputs.forEach((input) => {
+            document.querySelector(`.${input}`).value = "";
+          });
+          document.querySelector(".table-orderswithdiscounts").innerHTML =
+            await DisplayOrders(globalorders);
+          attachDeleteEvents();
+        });
+    </script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
