@@ -107,3 +107,34 @@ footer p {
   width: 100%;
   z-index: 1055;
 }
+
+.content {
+  width: 100%;
+  background-color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  border-radius: 8px;
+}
+.table-container {
+  min-height: 100%;
+}
+.input-field {
+  margin-bottom: 15px;
+}
+.input-button {
+  border-radius: 10px;
+}
+
+.col-md-4 {
+  padding-right: 10px;
+}
+
+.col-md-8 {
+  padding-left: 10px;
+}
+
+.border-left {
+  border-left: 0.666667px solid rgb(218, 221, 225);
+}
+
+
