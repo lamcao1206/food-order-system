@@ -437,11 +437,27 @@ BEGIN
     LEFT JOIN FOOD_ITEM FI ON C.FIID = FI.ID
     WHERE 
         FO.CID = p_CustomerID
+        AND (
+            EXISTS (
+                SELECT 1
+                FROM APPLY_FOR A
+                JOIN DISCOUNT_FROM_RESTAURANT DFR ON A.DFRcode = DFR.code
+                WHERE A.FOID = FO.ID
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM DISCOUNT_POINT_APPLY_FOR DPAF
+                JOIN DISCOUNT_FROM_EXCHANGE_POINT DFEP ON DPAF.DFEPcode = DFEP.code
+                WHERE DPAF.FOID = FO.ID
+            )
+        )
     GROUP BY 
         FO.ID;
 END //
 
 DELIMITER ;
+
+
 
 
 
