@@ -81,15 +81,6 @@ export default class FoodItemController {
       const { ID } = req.params;
       const { name, price, restaurant, category } = req.body;
 
-      // Check food item existence
-      const foodItemRows = await check_fooditem_existence(ID);
-      if (foodItemRows === 0) {
-        return res.status(404).json({
-          status: "error",
-          message: "Food item not found",
-        });
-      }
-
       //Retrieve categoryID
       const categoryRows = await find_categoryID(restaurant, category);
       if (categoryRows.length === 0) {
@@ -99,7 +90,7 @@ export default class FoodItemController {
         });
       }
       const categoryID = categoryRows[0].ID;
-
+      
       //Update food item info
       const [result] = await pool.execute('CALL UpdateFoodItem(?,?,?,?,?)', [ID,name, price,"", categoryID]);
       res.status(200).json({
