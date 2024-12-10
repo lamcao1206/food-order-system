@@ -1,6 +1,5 @@
 import pool from "../configs/db.config.js";
 
-
 export default class FoodItemController {
   async getFoodItem(req, res) {
     try {
@@ -11,7 +10,7 @@ export default class FoodItemController {
       JOIN restaurant r ON c.RID=r.ID
       `;
       const [result] = await pool.execute(sql);
-      res.status(200).render('fooditem.ejs',{
+      res.status(200).render("fooditem.ejs", {
         status: "success",
         result,
       });
@@ -38,17 +37,8 @@ export default class FoodItemController {
       const categoryID = categoryRows[0].ID;
 
       //Check if duplicate FoodItem
-      const sql_findduplicatefooditem = `
-      SELECT * FROM food_item 
-      WHERE name=? AND price=? AND categoryID=?
-      `;
-
-      const [rows] = await pool.execute(sql_findduplicatefooditem, [
-        name,
-        price,
-        categoryID,
-      ]);
-      if (rows.length > 0) {
+      const dup_result= await check_fooditem_duplicate(price,name,categoryID);
+      if (dup_result === true) {
         return res.status(401).json({
           status: "error",
           message: "Already add this food item",
@@ -56,7 +46,7 @@ export default class FoodItemController {
       }
 
       //Insert new FoodItem
-      const [result] = await pool.execute('CALL AddFoodItem(?,?,?,?)', [
+      const [result] = await pool.execute("CALL AddFoodItem(?,?,?,?)", [
         name,
         price,
         "",
@@ -90,13 +80,19 @@ export default class FoodItemController {
         });
       }
       const categoryID = categoryRows[0].ID;
-      
+
       //Update food item info
-      const [result] = await pool.execute('CALL UpdateFoodItem(?,?,?,?,?)', [ID,name, price,"", categoryID]);
+      const [result] = await pool.execute("CALL UpdateFoodItem(?,?,?,?,?)", [
+        ID,
+        name,
+        price,
+        "",
+        categoryID,
+      ]);
       res.status(200).json({
-        status:"success",
+        status: "success",
         message: "User updated successfully!",
-        result
+        result,
       });
     } catch (error) {
       res.status(500).json({
@@ -118,7 +114,7 @@ export default class FoodItemController {
       }
 
       //Delete food item
-      await pool.execute('CALL DeleteFoodItem(?)', [ID]);
+      await pool.execute("CALL DeleteFoodItem(?)", [ID]);
 
       res.status(200).json({
         status: "success",
@@ -132,28 +128,28 @@ export default class FoodItemController {
     }
   }
 
-  async getRestaurant_Category (req,res) {
+  async getRestaurant_Category(req, res) {
     try {
-      const sql =  `
+      const sql = `
     SELECT 
       c.name as categoryname,
       r.name as restaurantname
     FROM category c
     LEFT JOIN restaurant r on c.RID = r.ID
-    `
-    const [result]= await pool.execute(sql);
-    let res_table = {}
-    result.forEach(item=> {
-      if (!res_table[item.restaurantname]) {
-        res_table[item.restaurantname] = [];
-      }
-      res_table[item.restaurantname].push(item.categoryname);
-    });
-    return res.status(200).json({
-      status:"success",
-      res_table
-    })
-    } catch(error) {
+    `;
+      const [result] = await pool.execute(sql);
+      let res_table = {};
+      result.forEach((item) => {
+        if (!res_table[item.restaurantname]) {
+          res_table[item.restaurantname] = [];
+        }
+        res_table[item.restaurantname].push(item.categoryname);
+      });
+      return res.status(200).json({
+        status: "success",
+        res_table,
+      });
+    } catch (error) {
       res.status(500).json({
         status: "error",
         message: error.message,
@@ -182,4 +178,19 @@ const check_fooditem_existence = async (ID) => {
   const sql_findFoodItem = "SELECT * FROM food_item WHERE ID = ?";
   const [foodItemRows] = await pool.execute(sql_findFoodItem, [ID]);
   return foodItemRows.length;
+};
+
+//Check duplicate item when addition
+const check_fooditem_duplicate = async (price, name, categoryID) => {
+  const sql_findduplicatefooditem = `
+      SELECT * FROM food_item 
+      WHERE name=? AND price=? AND categoryID=?
+      `;
+
+  const [rows] = await pool.execute(sql_findduplicatefooditem, [
+    name,
+    price,
+    categoryID,
+  ]);
+  return rows.length>0?true:false;
 };
