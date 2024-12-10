@@ -143,7 +143,7 @@ CREATE TABLE discount_point_apply_for (
     DFEPcode VARCHAR(100) NOT NULL,
     FOID INT NOT NULL,
     PRIMARY KEY (DFEPcode, FOID),
-    FOREIGN KEY (DFEPcode) REFERENCES DISCOUNT_FROM_EXCHANGE_POINT(code),
+    FOREIGN KEY (DFEPcode) REFERENCES DISCOUNT_FROM_EXCHANGE_POINT(code) ON DELETE CASCADE,
     FOREIGN KEY (FOID) REFERENCES FOOD_ORDER(ID) ON DELETE CASCADE
 );
 
@@ -457,7 +457,7 @@ DELIMITER ;
 
 DELIMITER //
 -- -----------------------------
--- PROCEDURE 2
+-- PROCEDURE 2 : Không xài
 -- -----------------------------
 DELIMITER //
 
@@ -506,7 +506,9 @@ END //
 DELIMITER ;
 
 -- **************************************************************
--- PROCEDURE 3
+-- PROCEDURE 3 : Xài
+
+DROP PROCEDURE IF EXISTS RetrieveOrdersByCategory;
 
 DELIMITER //
 
@@ -514,31 +516,21 @@ CREATE PROCEDURE RetrieveOrdersByCategory(
     IN p_categoryID INT
 )
 BEGIN
-    -- Query 1: Basic details of orders for the specified category
     SELECT 
         FO.ID AS OrderID,
         FO.order_time_stamp AS OrderTime,
+        FO.rating,
         CU.name AS CustomerName,
-        FI.name AS FoodItemName,
-        FO.order_status AS OrderStatus
+        SUM(C.quantity) AS TotalItems, 
+        FO.order_status AS OrderStatus,
+        SUM(C.quantity * FI.price) AS TotalRevenue 
     FROM FOOD_ORDER FO
     JOIN CUSTOMER CU ON FO.CID = CU.ID
     JOIN CONTAIN C ON FO.ID = C.FOID
     JOIN FOOD_ITEM FI ON C.FIID = FI.ID
     WHERE FI.categoryID = p_categoryID
-    ORDER BY FO.order_time_stamp;
-
-    -- Query 2: Aggregate details of orders for the specified category
-    SELECT 
-        FO.ID AS OrderID,
-        SUM(C.quantity) AS TotalItems,
-        SUM(C.quantity * FI.price) AS TotalRevenue
-    FROM FOOD_ORDER FO
-    JOIN CONTAIN C ON FO.ID = C.FOID
-    JOIN FOOD_ITEM FI ON C.FIID = FI.ID
-    WHERE FI.categoryID = p_categoryID
-    GROUP BY FO.ID
-    HAVING TotalItems > 0
+    GROUP BY FO.ID, FO.order_time_stamp, CU.name, FO.order_status, FO.rating
+    HAVING TotalItems > 0 
     ORDER BY TotalRevenue DESC;
 END //
 
@@ -616,6 +608,112 @@ DELIMITER ;
 
 select * from Account;
 
+-- -----------------------------
+-- FUNCTION 1: count_food
+-- -----------------------------
+
+DROP FUNCTION IF EXISTS count_food;
+
+DELIMITER $$ 
+CREATE FUNCTION count_food(
+	restaurant_name VARCHAR(255),
+	category_id INT 
+)
+RETURNS INT
+DETERMINISTIC
+BEGIN 
+	DECLARE count INT;
+	DECLARE restaurant_exists INT; 
+
+	IF category_id < 0 THEN 
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Category ID must be positive';
+	END IF;
+
+	IF restaurant_name REGEXP '^[\\p{L} ]+$' THEN
+		SELECT COUNT(*) INTO restaurant_exists FROM RESTAURANT 
+		WHERE name = restaurant_name;
+
+		IF restaurant_exists = 0 THEN 
+			SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Restaurant does not exist!';
+		ELSE 
+			SELECT COUNT(*) INTO count FROM FOOD_ITEM fi
+			JOIN CATEGORY c ON fi.categoryID = c.ID 
+			JOIN RESTAURANT r ON c.RID = r.ID 
+			WHERE categoryID = category_id AND r.name = restaurant_name;
+		END IF;
+	ELSE 
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Wrong restaurant format name!';
+	END IF;
+
+	RETURN count;
+END $$
+
+DELIMITER ;
+
+-- -----------------------------
+-- FUNCTION 2: categorize_food
+-- -----------------------------
+
+DROP FUNCTION IF EXISTS categorize_food;
+DELIMITER $$
+
+CREATE FUNCTION categorize_food(
+    restaurant_name VARCHAR(255),
+    food_name VARCHAR(255)
+)
+RETURNS VARCHAR(15)
+DETERMINISTIC
+BEGIN
+    DECLARE price_level VARCHAR(15);
+    DECLARE food_item_price INT;
+    DECLARE average_price INT;
+    DECLARE min_price INT;
+    DECLARE max_price INT;
+
+
+    IF restaurant_name NOT REGEXP '^[\\p{L} ]+$' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Wrong restaurant format name!';
+    END IF;
+    
+    IF food_name NOT REGEXP '^[\\p{L}0-9À-ÿ \-\.,\(\)]+$' THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid food name';
+	END IF;
+
+    IF (SELECT COUNT(*) 
+        FROM FOOD_ITEM fi 
+        JOIN CATEGORY c ON fi.categoryID = c.ID
+        JOIN RESTAURANT r ON c.RID = r.ID
+        WHERE fi.name = food_name AND r.name = restaurant_name) = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Food item does not exist in the restaurant!';
+    END IF;
+
+    SELECT price INTO food_item_price
+    FROM FOOD_ITEM fi
+    JOIN CATEGORY c ON fi.categoryID = c.ID
+    JOIN RESTAURANT r ON c.RID = r.ID
+    WHERE fi.name = food_name AND r.name = restaurant_name;
+
+    SELECT 
+        AVG(price), MIN(price), MAX(price)
+    INTO average_price, min_price, max_price
+    FROM FOOD_ITEM fi
+    JOIN CATEGORY c ON fi.categoryID = c.ID
+    JOIN RESTAURANT r ON c.RID = r.ID
+    WHERE r.name = restaurant_name;
+
+    IF food_item_price >= (average_price + max_price) / 2 THEN
+        SET price_level = 'High';
+    ELSEIF food_item_price <= (average_price + min_price) / 2 THEN
+        SET price_level = 'Low';
+    ELSE
+        SET price_level = 'Medium';
+    END IF;
+
+    RETURN price_level;
+END $$
+
+DELIMITER ;
+
 
 -- =====================================================================================================================
 
@@ -680,17 +778,19 @@ VALUES
 INSERT INTO DISCOUNT_FROM_RESTAURANT (code, usageLimit, used_Count, start_date, end_date, value, RID)
 VALUES
 ('DIS_HH5', 100, 0, '2024-12-01', '2024-12-08', 5000, 6),
-('DIS_PLT10', 1, 0, '2024-12-01', '2024-12-08', 10000, 7),
+('DIS_PLT10', 10, 0, '2024-12-01', '2024-12-08', 10000, 7),
 ('DIS_BTN20', 30, 0, '2024-12-01', '2024-12-08', 20000, 8),
 ('DIS_PVN10', 20, 0, '2024-12-01', '2024-12-08', 10000, 9),
-('DIS_SPECIAL', 2, 0, '2024-12-01', '2024-12-08', 20000, 6),
+('DIS_SPECIAL', 20, 0, '2024-12-01', '2024-12-08', 20000, 6),
 
 
 ('DIS_HT5', 100, 0, '2024-12-01', '2024-12-08', 5000, 14),
 ('DIS_DIMTUTAC10', 50, 0, '2024-12-01', '2024-12-08', 10000, 15),
 ('DIS_SanFoulu20', 30, 0, '2024-12-01', '2024-12-08', 20000, 16),
 ('DIS_BotChien10', 20, 0, '2024-12-01', '2024-12-08', 10000, 17),
-('DIS_SPECIAL2', 2, 0, '2024-12-01', '2024-12-08', 20000, 18);
+('DIS_SPECIAL2', 20, 0, '2024-12-01', '2024-12-08', 20000, 18),
+
+('DIS_COMPANY1', 20, 0, '2024-11-30', '2024-12-07', 20000, 10);
 
 
 INSERT INTO DISCOUNT_FROM_EXCHANGE_POINT (code, exchange_date,  end_date, value, CID)
@@ -717,12 +817,25 @@ VALUES
 ('Nước uống', 9),
 ('pizza', 10), -- test trigger 2
 ('mì', 10), -- test trigger 2
-
 ('Bánh', 14),
 ('Mì', 15),
 ('Dimsum', 16),
 ('Đồ Chiên', 17),
-('Pizza', 18);
+
+('Pizza', 18),
+('Gà', 18),
+('Mì', 18),
+('Salad', 18),
+('Khoai tây chiên', 18),
+('Nước uống', 18),
+
+('Bánh', 6),
+('Bơ', 6),
+('Chà bông', 6),
+('Cơm', 6),
+('Chả lụa', 6),
+('Pate', 6),
+('Dăm bông', 6);
 
 
 
@@ -730,19 +843,56 @@ VALUES
 INSERT INTO FOOD_ITEM (name, price, image, categoryID)
 VALUES
 ('Bánh Mì Thập Cẩm', 68000, 'https://phapluatbanquyen.phaply.vn/uploads/images/users/images/2021/12/5515151565656.png', 1),
-('Cơm Tấm Sườn', 35000, 'https://comtamthuankieu.com.vn/wp-content/uploads/2020/12/xhdt.png', 2),
+('Bánh Mì Ốp La', 30000, 'https://img-global.cpcdn.com/recipes/01914f4be6cc4786/1200x630cq70/photo.jpg', 1),
+('Bánh Mì Phá Lấu', 40000, 'https://media-cdn-v2.laodong.vn/storage/newsportal/2023/12/17/1281247/Banh-Mi-3.jpg', 1),
+('Cơm mực dồn thịt', 90000, 'https://comtamthuankieu.com.vn/wp-content/uploads/2020/12/IMG_0100-scaled.jpg', 2),
+('Cơm Tấm Sườn', 60000, 'https://comtamthuankieu.com.vn/wp-content/uploads/2020/12/xhdt.png', 2),
+('Cơm bì chả', 45000, 'https://cdn.tgdd.vn/2020/08/CookProduct/52-1200x676.jpg', 2),
+('Cơm ba rọi nướng', 60000, 'https://thenguyen.vn/files/products/product_1071/com-ba-roi-nuong.jpg', 2),
+('Cơm sườn cọng nướng', 80000, 'https://comtamthuankieu.com.vn/wp-content/uploads/2020/12/IMG_0054-scaled.jpg', 2),
+
 ('Bún Thịt Nướng Đặc Biệt', 40000, 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTL5eeW1rOAoRefLYGQenWho1QyBzfPK9jHNA&s', 3),
 ('Phở Tái', 45000, 'https://bizweb.dktcdn.net/thumb/grande/100/479/802/products/z5194000249948-d9ce50b9cd9dba2091e04aa86562b9ab.jpg?v=1708931870103', 4),
 ('Coca', 20000, 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQEeRLdAYYXX89qnF7bBe3mQkN0EBgp8U5VuA&s', 7),
 ('Trà đá', 10000, 'https://image.tienphong.vn/w890/Uploaded/2024/rkznae/2020_06_11/uong_tra_da_moi_ngay_nhung_khong_phai_ai_cung_biet_nhung_cam_ki_nay_04_6503_UJUV.jpg', 8),
-('Pizza hải sản pesto', 169000, 'http://thepizzacompany.vn/images/thumbs/000/0002624_seafood-pesto_300.png', 9), -- test trigger 2
-('Mỳ Ý sốt kem cà chua', 139000, 'http://thepizzacompany.vn/images/thumbs/000/0002257_spaghetti-shrimp-rose_300.png', 10), -- test trigger 2
+
+('Pizza hải sản pesto', 169000, 'http://thepizzacompany.vn/images/thumbs/000/0002624_seafood-pesto_300.png', 9), -- test trigger 2 1.1.1
+('Mỳ Ý sốt kem cà chua', 139000, 'http://thepizzacompany.vn/images/thumbs/000/0002257_spaghetti-shrimp-rose_300.png', 10), -- test trigger 2 1.1.1
 
 ('Bánh xèo', 69000, 'https://www.huongnghiepaau.com/wp-content/uploads/2017/02/cach-lam-banh-xeo-mien-trung.jpg', 11),
 ('Mì xào vịt', 350000, 'https://vit29.com/media/news/1502_mtrnvtquay.jpg', 12),
 ('Há cảo', 40000, 'https://tiki.vn/blog/wp-content/uploads/2023/09/ha-cao-4.jpg', 13),
 ('Bột chiên trứng ', 30000, 'https://i.ytimg.com/vi/q7is9fGsGuw/maxresdefault.jpg', 14),
-('Pizza pepperoni', 200000, 'https://file.hstatic.net/1000389344/article/pepperoni_5_1c9ba759196f480eba397d628ac958ed_1024x1024.jpg', 15);
+
+('Pizza pepperoni', 200000, 'https://file.hstatic.net/1000389344/article/pepperoni_5_1c9ba759196f480eba397d628ac958ed_1024x1024.jpg', 15),
+('Cánh gà giòn Xốt Cay (4 miếng)', 79000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Ga-Mala%204_20241122160004425.jpeg', 16),
+('Mì Ý bò Bằm Xốt Cà Chua', 120000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Mi_Y_Thit_Bam_Xot_Ca_Chua_400x275.jpg', 17),
+('Xà Lách Da Cá Hồi', 89000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Xa_Lach_Da_Ca_Hoi_400x275.jpg', 15),
+('Pizza Hải Sản Nhiệt Đới', 229000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Pizza_Hai_San_Nhiet_Doi_400x275.jpg', 15),
+('Pizza Thập Cẩm', 229000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Pizza_Thap_Cam_400x275.jpg', 15),
+('Pizza Cơn lốc Hải Sản', 239000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Pizza_Con_Loc_Hai_San_400x275.jpg', 15),
+('Khoai Tây Chiên', 59000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Khoai_Tay_Chien_400x275.jpg', 19),
+('Pepsi không calo 320ml', 30000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Pepsi_NoCalo_Can_400x275.jpg', 20),
+('Pepsi Lemon 320ml', 30000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Pepsi_Lemon_Can_400x275.jpg', 20),
+
+('Bánh bao đặc biệt', 35000, 'https://banhmihuynhhoa.vn/wp-content/uploads/2024/10/dscf0910-min-309dc785-f3b9-4047-8912-bf0ad14c01c7-300x300.jpg', 1),
+('Bơ tươi Huynh Hoa', 65000, 'https://cdn.pizzahut.vn/images/Web_V3/Products_MenuTool/Pepsi_Lemon_Can_400x275.jpg', 1),
+('Chả đặc biệt', 120000, 'https://banhmihuynhhoa.vn/wp-content/uploads/2024/10/dscf1089-min-300x300.jpg', 1),
+('Cơm cháy siêu cay', 50000, 'https://banhmihuynhhoa.vn/wp-content/uploads/2024/10/dscf1089-min-300x300.jpg', 1),
+('Chả lụa đặc biệt', 140000, 'https://banhmihuynhhoa.vn/wp-content/uploads/2024/10/DSCF1265-300x300.jpg', 1),
+('Pate Huynh Hoa', 90000, 'https://banhmihuynhhoa.vn/wp-content/uploads/2024/10/FOOD-HUYNH-HOA25835-600x600.jpg', 1),
+('Dăm bông vai vuông', 140000, 'https://banhmihuynhhoa.vn/wp-content/uploads/2024/10/FOOD-HUYNH-HOA25889-600x600.jpg', 1),
+
+
+('Pizza Tôm Cocktail', 159000, 'http://thepizzacompany.vn/images/thumbs/000/0002216_shrimp-ctl-test_300.png', 9),
+('Pizza Hải Sản Nhiệt Đới', 159000, 'http://thepizzacompany.vn/images/thumbs/000/0002216_shrimp-ctl-test_300.png', 9),
+('Pizza Aloha', 149000, 'http://thepizzacompany.vn/images/thumbs/000/0002216_shrimp-ctl-test_300.png', 9),
+('Pizza Thịt Xông Khói', 149000, 'http://thepizzacompany.vn/images/thumbs/000/0002221_bacon-sup_300.png', 9),
+('Pizza Hải Sản Cao Cấp', 149000, 'http://thepizzacompany.vn/images/thumbs/000/0002214_sf-deluxe_300.png', 9),
+('Mì Ý Chay Sốt Marinara', 109000, 'http://thepizzacompany.vn/images/thumbs/000/0003135_spaghetti-vegetarian-w-marinara-sauce_300.png', 10);
+
+
+
 
 
 
@@ -766,34 +916,219 @@ VALUES
 
 ('CARD', '69 Le Loi, Q.1, TP.HCM', 'delivered', '2024-02-13 15:31:00', 'Dịch vụ hoàn hảo!', 5, 'delivered', 'finished', 25000, 11, 6, 4),
 ('CASH', '456 Nguyen Canh Chan, Q.1, TP.HCM', 'delivered', '2024-09-01 10:30:00', 'Dịch vụ không tốt !', 3, 'delivered', 'finished', 20000, 12, 15, 5),
-('CASH', '12 Nguyen Thuong Hien, Q.10, TP.HCM', 'pending', '2024-08-24 16:20:00', 'Dịch vụ oke', 5, 'delivered', 'finished', 10000, 13, 16, 5); 
+('CASH', '12 Nguyen Thuong Hien, Q.10, TP.HCM', 'pending', '2024-08-24 16:20:00', 'Dịch vụ oke', 5, 'delivered', 'finished', 10000, 13, 16, 5), 
+-- ORDER WITH MANY DISCOUNT USED (PROCEDURE 1 1.2.3)
+-- Delivered Orders
+('CARD', '654 Đường Hai Bà Trưng, Q.1, TP.HCM', 'delivered', '2024-12-02 18:45:00', 'Hương vị tuyệt vời!', 5, 'delivered', 'finished', 20000, 5, 6, 1),
+('CASH', '321 Đường Nguyễn Thị Minh Khai, Q.1, TP.HCM', 'delivered', '2024-12-02 19:00:00', 'Nhân viên giao hàng thân thiện.', 4, 'delivered', 'finished', 15000, 4, 7, 2),
+('CARD', '207-209 Bàu Cát, Phường 13, Tân Bình, TP.HCM', 'delivered', '2024-12-03 12:30:00', 'Pizza ngon!', 5, 'delivered', 'finished', 20000, 1, 10, 3),
+('CASH', '12 Nguyễn Thị Nghĩa, Q.1, TP.HCM', 'delivered', '2024-12-03 13:15:00', 'Bún thịt nướng siêu ngon!', 5, 'delivered', 'finished', 15000, 3, 8, 4),
+('CARD', '56 Cao Thắng, Q.3, TP.HCM', 'delivered', '2024-12-04 17:00:00', 'Phở hơi mặn.', 3, 'delivered', 'finished', 10000, 11, 9, 1),
 
+-- Pending Orders
+('CARD', '345 Nguyễn Trãi, Q.5, TP.HCM', 'pending', '2024-12-04 14:30:00', '', 5, NULL, NULL, 15000, 2, 7, 2),
+('CASH', '26 Lê Thị Riêng, Q.1, TP.HCM', 'pending', '2024-12-04 16:00:00', '', 5, NULL, NULL, 15000, 12, 6, 3),
+('CARD', '56 Lý Chính Thắng, Q.3, TP.HCM', 'pending', '2024-12-04 18:45:00', '', 5, NULL, NULL, 10000, 13, 17, 4),
+('CASH', '789 Đường Lê Văn Sỹ, Q.3, TP.HCM', 'confirmed', '2024-12-01 20:15:00', '', 5, 'delivering', 'in_process', 15000, 4, 7, 1),
+('CARD', '207-209 Bà Huyện Thanh Quan, Q.3, TP.HCM', 'confirmed', '2024-12-02 22:00:00', '', 5, 'delivering', 'in_process', 15000, 11, 6, 5),
 
+-- Phu order
+('CARD', '654 Đường Hai Bà Trưng, Q.1, TP.HCM', 'confirmed', '2024-12-02 21:00:00', '', 5, 'delivering', 'in_process', 15000, 5, 6, 5),
+('CARD', '654 Đường Hai Bà Trưng, Q.1, TP.HCM', 'confirmed', '2024-12-02 19:00:00', '', 5, 'delivering', 'in_process', 15000, 5, 7, 2),
+('CARD', '654 Đường Hai Bà Trưng, Q.1, TP.HCM', 'confirmed', '2024-12-02 16:00:00', '', 5, 'delivering', 'in_process', 15000, 5, 8, 1),
+-- customer 12
+('CARD', '456 Nguyen Canh Chan, Q.1, TP.HCM', 'confirmed', '2024-12-02 16:00:00', '', 5, 'delivering', 'in_process', 15000, 12, 6, 3),
+('CARD', '456 Nguyen Canh Chan, Q.1, TP.HCM', 'confirmed', '2024-12-02 17:00:00', '', 5, 'delivering', 'in_process', 14000, 12, 7, 4),
+('CARD', '456 Nguyen Canh Chan, Q.1, TP.HCM', 'confirmed', '2024-12-02 18:30:00', '', 5, 'delivering', 'in_process', 15000, 12, 8, 5),
+-- customer 13
+('CASH', '12 Nguyen Thuong Hien, Q.10, TP.HCM', 'confirmed', '2024-12-02 08:15:00', '', 5, 'delivering', 'in_process', 15000, 13, 10, 1),
+('CASH', '12 Nguyen Thuong Hien, Q.10, TP.HCM', 'confirmed', '2024-12-02 09:00:00', '', 5, 'delivering', 'in_process', 13000, 13, 18, 2),
+('CASH', '12 Nguyen Thuong Hien, Q.10, TP.HCM', 'confirmed', '2024-12-02 20:00:00', '', 5, 'delivering', 'in_process', 13000, 13, 6, 2),
+-- CUSTOMER 1
+('CASH', '123 Đường Nam Kỳ Khởi Nghĩa, Q.1, TP.HCM', 'delivered', '2024-12-02 08:15:00', '', 5, 'delivered', 'finished', 15000, 1, 6, 3),
+('CASH', '123 Đường Nam Kỳ Khởi Nghĩa, Q.1, TP.HCM', 'delivered', '2024-12-02 09:00:00', '', 5, 'delivered', 'finished', 15000, 1, 7, 4),
+('CASH', '123 Đường Nam Kỳ Khởi Nghĩa, Q.1, TP.HCM', 'delivered', '2024-12-02 20:00:00', '', 5, 'delivered', 'finished', 25000, 1, 8, 5),
+-- CUSTOMER 2
+('CARD', '456 Đường Cách Mạng Tháng 8, Q.3, TP.HCM', 'confirmed', '2024-12-02 16:00:00', '', 5, 'delivering', 'in_process', 15000, 2, 6, 3),
+('CARD', '456 Đường Cách Mạng Tháng 8, Q.3, TP.HCM', 'confirmed', '2024-12-02 17:00:00', '', 5, 'delivering', 'in_process', 15000, 2, 7, 1),
+('CARD', '456 Đường Cách Mạng Tháng 8, Q.3, TP.HCM', 'confirmed', '2024-12-02 18:30:00', '', 5, 'delivering', 'in_process', 15000, 2, 8, 1),
+-- CUSTOMER 3
+('CASH', '789 Đường Lê Văn Sỹ, Q.3, TP.HCM', 'confirmed', '2024-12-02 08:15:00', '', 5, 'delivering', 'in_process', 15000, 3, 10, 1),
+('CASH', '789 Đường Lê Văn Sỹ, Q.3, TP.HCM', 'confirmed', '2024-12-02 09:00:00', '', 5, 'delivering', 'in_process', 17000, 3, 18, 2),
+('CASH', '789 Đường Lê Văn Sỹ, Q.3, TP.HCM', 'confirmed', '2024-12-02 20:00:00', '', 5, 'delivering', 'in_process', 15000, 3, 6, 3),
+-- CUSTOMER 4
+('CASH', '207-209 Bàu Cát, Phường 13, Tân Bình, TP.HCM', 'confirmed', '2024-12-02 08:15:00', '', 5, 'delivering', 'in_process', 14000, 4, 10, 1),
+('CASH', '207-209 Bàu Cát, Phường 13, Tân Bình, TP.HCM', 'confirmed', '2024-12-02 09:00:00', '', 5, 'delivering', 'in_process', 16000, 4, 18, 5),
+('CASH', '207-209 Bàu Cát, Phường 13, Tân Bình, TP.HCM', 'confirmed', '2024-12-02 20:00:00', '', 5, 'delivering', 'in_process', 16000, 4, 6, 5);
 
-select * from restaurant;
-select * from food_item;
-select * from category;
 
 -- Insert data into `use`
 INSERT INTO `use` (CID, DFRcode)
 VALUES
 (1, 'DIS_HH5');
 
+select * from food_order;
+select * from food_item;
+select * from restaurant;
+
+
+
 -- Insert data into `contain`
 INSERT INTO `contain` (FOID, FIID, quantity)
 VALUES
 (1, 1, 3),
-(2, 2, 2),
-(4, 7, 2), -- test trigger 2: 2 Pizzas
-(4, 8, 1); -- test trigger 2: 1 Pasta
+(2, 4, 2),
+
+(3,1,3),
 
 
+
+(4, 13, 2), -- test trigger 2: 2 Pizzas
+(4, 14, 1), -- test trigger 2: 1 Pasta
+
+(5, 30, 2),
+(6, 16, 2),
+(7, 17, 3),
+
+(8,1,3),
+(8,2,4),
+(8,3,1),
+
+(9,4,3),
+(9,6,2),
+(9,5,1),
+
+(10,36,2),
+(10,37,2),
+(10,38,1),
+(10,39,5),
+
+(11,9,3),
+(12,10,2),
+
+
+(13,8,5),
+(13,7,1),
+
+(14,1,4),
+(15,18,2),
+
+(16,8,1),
+(16,7,3),
+
+
+(17,1,5),
+
+(18,1,2),
+(18,2,5),
+
+
+(19,4,5),
+(19,5,4),
+
+
+
+(20,9,3),
+
+
+(21,32,2),
+(21,33,4),
+(21,34,3),
+
+
+(22,8,1),
+
+(23,9,2),
+
+
+(24,14,5),
+
+(25,22,2),
+
+(26,29,3),
+(26,30,1),
+
+(27,1,2),
+(27,2,3),
+
+(28,5,1),
+(28,6,1),
+
+(29,9,7),
+
+(30,2,4),
+(30,3,5),
+
+(31,5,2),
+(31,8,3),
+
+
+(32,9,2),
+(33,13,3),
+
+
+(34,22,5),
+
+(35,32,2),
+(35,34,3),
+
+(36,14,2),
+(36,13,3),
+
+(37,22,2),
+
+(38,1,3),
+(38,2,3),
+(38,3,3);
+
+select * from food_order;
+select * from food_item;
+select * from restaurant;
+
+
+
+
+select * from restaurant;
+select * from discount_from_restaurant;
+select * from food_order;
 -- Insert data into `apply_for`
 INSERT INTO apply_for (DFRcode, FOID)
 VALUES
-('DIS_HH5', 1);
-
-
+('DIS_HH5', 1),
+('DIS_HH5', 3),
+('DIS_HH5', 5),
+('DIS_HH5', 14),
+('DIS_PLT10', 2),
+('DIS_PLT10', 9),
+('DIS_PLT10', 13),
+('DIS_PLT10', 16),
+('DIS_BTN20', 11),
+('DIS_PVN10', 12),
+('DIS_COMPANY1',4),
+('DIS_COMPANY1',10),
+('DIS_BotChien10', 15),
+('DIS_SPECIAL2', 17),
+('DIS_HH5', 18),
+('DIS_HH5', 21),
+('DIS_HH5', 26),
+('DIS_HH5', 27),
+('DIS_HH5', 30),
+('DIS_HH5', 35),
+('DIS_HH5', 38),
+('DIS_PLT10', 19),
+('DIS_PLT10', 22),
+('DIS_PLT10', 28),
+('DIS_PLT10', 31),
+('DIS_BTN20', 20),
+('DIS_BTN20', 23),
+('DIS_BTN20', 29),
+('DIS_BTN20', 32),
+('DIS_COMPANY1', 24),
+('DIS_COMPANY1', 33),
+('DIS_COMPANY1', 36),
+('DIS_SPECIAL2', 25),
+('DIS_SPECIAL2', 34),
+('DIS_SPECIAL2', 37);
 
 
 -- Insert data into discount_point_apply_for
@@ -908,145 +1243,14 @@ VALUES
  -- ('DIS_PLT10',2);
 
 
+-- ------------------------**************************------------------------------------------------------------
+-- TEST FUNCTION 1 CHO PHẦN 1.2.4
 
+-- SELECT count_food('PizzaHut', 15) as result_1.2.4.1
 
+-- TEST FUNCTION 2 CHO PHẦN 1.2.4
+
+-- SELECT categorize_food('PizzaHut', 'Pepsi Lemon 320ml') as result_1.2.4.2
 
 
 -- SET SQL_SAFE_UPDATES = 1;
-
-
-
-
-
-
-DROP FUNCTION IF EXISTS count_food;
-
-DELIMITER $$ 
-CREATE FUNCTION count_food(
-	restaurant_name VARCHAR(255),
-	category_id INT 
-)
-RETURNS INT
-DETERMINISTIC
-BEGIN 
-	DECLARE count INT;
-	DECLARE restaurant_exists INT; 
-
-	IF category_id < 0 THEN 
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Category ID must be positive';
-	END IF;
-
-	IF restaurant_name REGEXP '^[\\p{L} ]+$' THEN
-		SELECT COUNT(*) INTO restaurant_exists FROM RESTAURANT 
-		WHERE name = restaurant_name;
-
-		IF restaurant_exists = 0 THEN 
-			SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Restaurant does not exist!';
-		ELSE 
-			SELECT COUNT(*) INTO count FROM FOOD_ITEM fi
-			JOIN CATEGORY c ON fi.categoryID = c.ID 
-			JOIN RESTAURANT r ON c.RID = r.ID 
-			WHERE categoryID = category_id AND r.name = restaurant_name;
-		END IF;
-	ELSE 
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Wrong restaurant format name!';
-	END IF;
-
-	RETURN count;
-END $$
-
-DELIMITER ;
-
--- 
---  Function 2 : categorize_food
--- 
-
-DROP FUNCTION IF EXISTS categorize_food;
-DELIMITER $$
-
-CREATE FUNCTION categorize_food(
-    restaurant_name VARCHAR(255),
-    food_name VARCHAR(255)
-)
-RETURNS VARCHAR(15)
-DETERMINISTIC
-BEGIN
-    DECLARE price_level VARCHAR(15);
-    DECLARE food_item_price INT;
-    DECLARE average_price INT;
-    DECLARE min_price INT;
-    DECLARE max_price INT;
-
-
-    IF restaurant_name NOT REGEXP '^[\\p{L} ]+$' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Wrong restaurant format name!';
-    END IF;
-    
-    IF food_name NOT REGEXP '^[\\p{L}0-9À-ÿ \-\.,\(\)]+$' THEN
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid food name';
-	END IF;
-
-    IF (SELECT COUNT(*) 
-        FROM FOOD_ITEM fi 
-        JOIN CATEGORY c ON fi.categoryID = c.ID
-        JOIN RESTAURANT r ON c.RID = r.ID
-        WHERE fi.name = food_name AND r.name = restaurant_name) = 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Food item does not exist in the restaurant!';
-    END IF;
-
-    SELECT price INTO food_item_price
-    FROM FOOD_ITEM fi
-    JOIN CATEGORY c ON fi.categoryID = c.ID
-    JOIN RESTAURANT r ON c.RID = r.ID
-    WHERE fi.name = food_name AND r.name = restaurant_name;
-
-    SELECT 
-        AVG(price), MIN(price), MAX(price)
-    INTO average_price, min_price, max_price
-    FROM FOOD_ITEM fi
-    JOIN CATEGORY c ON fi.categoryID = c.ID
-    JOIN RESTAURANT r ON c.RID = r.ID
-    WHERE r.name = restaurant_name;
-
-    IF food_item_price >= (average_price + max_price) / 2 THEN
-        SET price_level = 'High';
-    ELSEIF food_item_price <= (average_price + min_price) / 2 THEN
-        SET price_level = 'Low';
-    ELSE
-        SET price_level = 'Medium';
-    END IF;
-
-    RETURN price_level;
-END $$
-
-DELIMITER ;
-
-DROP PROCEDURE IF EXISTS RetrieveOrdersByCategory;
-
-DELIMITER //
-
-CREATE PROCEDURE RetrieveOrdersByCategory(
-    IN p_categoryID INT
-)
-BEGIN
-    SELECT 
-        FO.ID AS OrderID,
-        FO.order_time_stamp AS OrderTime,
-        CU.name AS CustomerName,
-        FI.name AS FoodItemName,
-        FI.price as FoodItemPrice,
-        C.quantity as Quantity,
-        FO.order_status AS OrderStatus,
-        SUM(C.quantity) AS TotalItems,
-        SUM(C.quantity * FI.price) AS TotalRevenue
-    FROM FOOD_ORDER FO
-    JOIN CUSTOMER CU ON FO.CID = CU.ID
-    JOIN CONTAIN C ON FO.ID = C.FOID
-    JOIN FOOD_ITEM FI ON C.FIID = FI.ID
-    WHERE FI.categoryID = p_categoryID
-    GROUP BY FO.ID, FO.order_time_stamp, CU.name, FI.name, FO.order_status
-    HAVING TotalItems > 0
-    ORDER BY TotalRevenue DESC;
-END //
-
-DELIMITER ;
