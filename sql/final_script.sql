@@ -1,5 +1,6 @@
 drop database if exists food_ordering_db;
 
+
 create database if not exists food_ordering_db;
 
 use food_ordering_db;
@@ -294,7 +295,7 @@ CREATE PROCEDURE DeleteFoodItem(
 BEGIN
     -- Kiểm tra nếu mã món ăn không tồn tại
     IF NOT EXISTS (SELECT 1 FROM FOOD_ITEM WHERE ID = idfood) THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'The food ID does not exist';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'The food item does not exist';
     -- Xóa món ăn nếu mã tồn tại
     ELSE
         DELETE FROM FOOD_ITEM WHERE ID = idfood;
@@ -303,9 +304,9 @@ END$$
 
 DELIMITER ;
 
-
-DELIMITER $$
 -- PROCEDURE 3
+DELIMITER $$
+
 CREATE PROCEDURE UpdateFoodItem(
 	IN idfood INT,
 	IN namefood VARCHAR(255),
@@ -316,7 +317,7 @@ CREATE PROCEDURE UpdateFoodItem(
 BEGIN
     -- Kiểm tra nếu mã món ăn không tồn tại
     IF NOT EXISTS (SELECT 1 FROM FOOD_ITEM WHERE ID = idfood) THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'The food ID does not exists';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'The food item does not exists';
     ELSEIF (pricefood <= 0 ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'The food price must be greater 0';
 	ELSEIF NOT EXISTS (SELECT 1 FROM CATEGORY WHERE ID = cateID) THEN
@@ -327,6 +328,7 @@ BEGIN
         where ID = idfood;
 	END IF;
 END$$
+
 DELIMITER ;
 
 
@@ -359,10 +361,11 @@ CREATE TRIGGER update_order_cost_after_insert_contain
 AFTER INSERT ON `contain`
 FOR EACH ROW
 BEGIN
-	DECLARE priceFood INT DEFAULT 0;
-    SET priceFood = (SELECT price FROM FOOD_ITEM WHERE ID = NEW.FIID);
+	DECLARE totalFoodCost INT DEFAULT 0;
+    SET totalFoodCost = 
+    (SELECT SUM(FI.price * C.quantity) FROM FOOD_ITEM FI, contain C WHERE FI.ID = C.FIID AND C.FOID = NEW.FOID);
 	UPDATE FOOD_ORDER
-	SET orderCost = priceFood * NEW.quantity + delivery_fee
+	SET orderCost = totalFoodCost + delivery_fee
 	WHERE ID = NEW.FOID;
 END$$
 
@@ -775,6 +778,7 @@ VALUES
 (18, 'PizzaHut', '1900633604', '207-209 Bà Huyện Thanh Quan, Q.3, Hồ Chí Minh', '08:00:00', '22:00:00');
 
 
+
 INSERT INTO DISCOUNT_FROM_RESTAURANT (code, usageLimit, used_Count, start_date, end_date, value, RID)
 VALUES
 ('DIS_HH5', 100, 0, '2024-12-01', '2024-12-08', 5000, 6),
@@ -792,6 +796,7 @@ VALUES
 
 ('DIS_COMPANY1', 20, 0, '2024-11-30', '2024-12-07', 20000, 10);
 
+select * from discount_from_exchange_point;
 
 INSERT INTO DISCOUNT_FROM_EXCHANGE_POINT (code, exchange_date,  end_date, value, CID)
 VALUES
@@ -803,6 +808,7 @@ VALUES
 ('EXC_DOE20', '2024-12-01 00:00:00', '2024-12-08 23:59:59', 5000, 11),
 ('EXC_SMITH80', '2024-12-01 00:00:00', '2024-12-08 23:59:59', 30000, 12),
 ('EXC_ALICE40', '2024-12-01 00:00:00', '2024-12-08 23:59:59', 15000, 13);
+
 
 
 INSERT INTO CATEGORY (name, RID)
@@ -893,10 +899,6 @@ VALUES
 
 
 
-
-
-
-
 -- Insert data into FOOD_DELIVER
 INSERT INTO FOOD_DELIVER (phone_number, vehicle_number, name)
 VALUES
@@ -906,6 +908,8 @@ VALUES
 ('0331134625', '60B-66490', 'Lê Tuấn Anh'),
 ('0335534345', '60B-66992', 'Hà Minh Giang');
 
+
+select * from food_order;
 
 INSERT INTO FOOD_ORDER (Payment_method, address, order_status, order_time_stamp, review, rating, ship_status, get_status, delivery_fee, CID, RID, FDID)
 VALUES
@@ -980,11 +984,10 @@ VALUES
 (2, 4, 2),
 
 (3,1,3),
+(3,2,1),
 
-
-
-(4, 13, 2), -- test trigger 2: 2 Pizzas
-(4, 14, 1), -- test trigger 2: 1 Pasta
+(4, 13, 2), -- test trigger 2 1.1.1: 2 Pizzas
+(4, 14, 1), -- test trigger 2 1.1.1: 1 Pasta
 
 (5, 30, 2),
 (6, 16, 2),
@@ -1081,16 +1084,8 @@ VALUES
 (38,2,3),
 (38,3,3);
 
-select * from food_order;
-select * from food_item;
-select * from restaurant;
 
 
-
-
-select * from restaurant;
-select * from discount_from_restaurant;
-select * from food_order;
 -- Insert data into `apply_for`
 INSERT INTO apply_for (DFRcode, FOID)
 VALUES
@@ -1190,13 +1185,17 @@ VALUES
 -- SET order_status = 'delivered'
 -- WHERE ID IN (3,4);
 
--- TEST TRIGGER 2 IN 1.2.2
--- SELECT * FROM CONTAIN;
--- SELECT * FROM FOOD_ORDER;
--- UPDATE CONTAIN
--- SET QUANTITY = 2
--- WHERE FOID = 1 AND FIID = 1;
 
+
+
+-- TEST TRIGGER 2 IN 1.2.2
+-- select * from food_order where ID = 3;
+-- INSERT INTO `contain` (FOID, FIID, quantity)
+-- values 
+-- (3, 1, 2), 
+-- (3, 2, 1);
+-- select * from food_order where ID = 3; 
+-- order cost = (Bánh mì Thập cẩm) * quantity  + (Bánh mì Ốp la) * quantity + delivery_fee = 68000 * 2 + 30000 * 1 + 15000 = 181000 
 
 
 
